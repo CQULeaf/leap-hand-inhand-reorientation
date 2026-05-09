@@ -1,0 +1,33 @@
+x-default-leap-reorientation-environment: &default-leap-reorientation-environment
+  - OMNI_KIT_ALLOW_ROOT=1
+
+x-default-leap-reorientation-deploy: &default-leap-reorientation-deploy
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [ gpu ]
+
+services:
+  leap-hand-inhand-reorientation:
+    env_file: .env.base
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      args:
+        - ISAACLAB_BASE_IMAGE_ARG=${ISAACLAB_BASE_IMAGE}
+        - DOCKER_LEAP_REORIENTATION_PATH_ARG=${DOCKER_LEAP_REORIENTATION_PATH}
+    image: leap-hand-inhand-reorientation
+    container_name: leap-hand-inhand-reorientation
+    volumes:
+      - type: bind
+        source: ../
+        target: ${DOCKER_LEAP_REORIENTATION_PATH}
+    network_mode: host
+    environment: *default-leap-reorientation-environment
+    deploy: *default-leap-reorientation-deploy
+    # This is the entrypoint for the container
+    entrypoint: bash
+    stdin_open: true
+    tty: true

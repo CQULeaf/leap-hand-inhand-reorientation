@@ -1,0 +1,35 @@
+[package]
+
+# Semantic Versioning is used: https://semver.org/
+version = "0.1.0"
+
+# Description
+category = "isaaclab"
+readme  = "README.md"
+
+title = "LEAP Hand In-Hand Reorientation for Isaac Lab"
+author = "Kenneth Shaw, Sri Anumakonda, Yuzhe Xiao"
+maintainer = "Yuzhe Xiao"
+description = "Isaac Lab environment and sim2real deployment code for proprioception-only LEAP Hand cube reorientation."
+repository = "https://github.com/CQULeaf/leap-hand-inhand-reorientation.git"
+keywords = ["isaaclab", "leap-hand", "dexterous-manipulation", "reinforcement-learning", "reorientation"]
+
+[dependencies]
+"isaaclab" = {}
+"isaaclab_assets" = {}
+"isaaclab_mimic" = {}
+"isaaclab_rl" = {}
+"isaaclab_tasks" = {}
+# NOTE: Add additional dependencies here
+
+[[python.module]]
+name = "LEAP_Isaaclab"
+
+[isaaclab_settings]
+# TODO: Uncomment and list any apt dependencies here.
+#       If none, leave it commented out.
+# apt_deps = ["example_package"]
+# TODO: Uncomment and provide path to a ros_ws
+#       with rosdeps to be installed. If none,
+#       leave it commented out.
+# ros_ws = "path/from/extension_root/to/ros_ws"

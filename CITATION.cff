@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the LEAP Hand paper and this software artifact."
+title: "LEAP Hand In-Hand Reorientation"
+type: software
+authors:
+  - family-names: Ye
+    given-names: Xuhang
+repository-code: "https://github.com/CQULeaf/leap-hand-inhand-reorientation"
+license: MIT
+date-released: 2026-05-09
+references:
+  - type: article
+    title: "LEAP Hand: Low-Cost, Efficient, and Anthropomorphic Hand for Robot Learning"
+    authors:
+      - family-names: Shaw
+        given-names: Kenneth
+      - family-names: Agarwal
+        given-names: Ananye
+      - family-names: Pathak
+        given-names: Deepak
+    year: 2023
+    conference:
+      name: "Robotics: Science and Systems"

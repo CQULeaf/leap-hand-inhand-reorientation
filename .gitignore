@@ -1,0 +1,38 @@
+# Omniverse
+**/*.dmp
+**/.thumbs
+
+# Python
+.DS_Store
+**/*.egg-info/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/*.pb
+
+# IDE
+**/.idea/
+**/.vscode/
+
+# Outputs
+**/runs/*
+# **/logs/*
+**/recordings/*
+**/output/*
+**/outputs/*
+**/videos/*
+**/wandb/*
+**/.neptune/*
+**/logs/*
+docker/artifacts/
+*.tmp
+
+# Isaac-Sim packman
+_isaac_sim*
+_repo
+_build
+.lastformat
+
+source/LEAP_Isaaclab/LEAP_Isaaclab/tasks/leap_crawler/*
+source/LEAP_Isaaclab/LEAP_Isaaclab/deployment_scripts/leap_crawler.py
+source/LEAP_Isaaclab/LEAP_Isaaclab/tasks/leap_three_axis_reorient/*
