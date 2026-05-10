@@ -27,26 +27,18 @@ source/LEAP_Isaaclab/
   LEAP_Isaaclab/deployment_scripts/
                             # rl_games policy loader 与实机控制器
 docker/                     # Isaac Lab 容器入口
-docs/images/                # 仿真与实机演示图片
 ```
 
 ## 环境要求
 
-当前代码来自 Isaac Lab extension 工程，原始 README 标注测试环境为：
+项目所用环境：
 
-- Ubuntu 22.04
-- NVIDIA GPU
-- Isaac Sim `4.5`
-- Isaac Lab `2.1.0`
-- Python `3.10`
-
-迁移整理后已在以下本地环境完成 smoke test：
-
-- Ubuntu 22.04
+- Ubuntu 22.04 LTS
 - NVIDIA GeForce RTX 5060 Laptop GPU
-- Isaac Sim `5.1`
-- Isaac Lab `0.54.3`
-- Python `3.11.15`
+- Isaac Sim `5.1.0`
+- Isaac Lab `2.3.0`
+- Conda 环境名：`env_isaaclab`
+- Isaac Lab 环境内 Python `3.11.15`
 
 本地脚本默认尝试激活 Conda 环境 `env_isaaclab`。如果当前 shell 没有 `conda` 命令，脚本会尝试加载 `/home/tools/anaconda3/etc/profile.d/conda.sh`。
 
