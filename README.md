@@ -1,5 +1,7 @@
 # 基于深度强化学习的 LEAP Hand 单轴手内方块重定向
 
+[技术报告 PDF](tech_report/main.pdf) · [项目展示网页](https://yexuhang.com/projects/leap-hand-inhand-reorientation/)
+
 该仓库整理了 LEAP Hand 在 Isaac Lab 中进行单轴手内方块重定向的训练、播放和实机部署代码。任务目标是在无视觉、无触觉反馈条件下，仅依赖电机本体感知历史，让 LEAP Hand 驱动方块持续完成绕 z 轴的分段重定向。
 
 ## 项目亮点

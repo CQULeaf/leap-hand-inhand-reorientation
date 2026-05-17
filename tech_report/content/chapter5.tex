@@ -1,0 +1,73 @@
+\section{评估、部署与复现}
+
+\subsection{现有评估入口}
+
+仓库已经提供预训练 checkpoint，并在 README 中给出仿真播放命令。
+
+\begin{lstlisting}[language=bash, caption={仿真播放与 smoke test}]
+bash scripts/eval/play_stage1.sh --num-envs 1
+
+bash scripts/eval/play_stage1.sh \
+  --num-envs 1 \
+  --max-steps 20 \
+  --headless \
+  --physx-smoke-buffers
+\end{lstlisting}
+
+有限步数播放命令适合作为迁移或环境配置后的 smoke test：它可以验证 Isaac Lab 能启动、任务能注册、checkpoint 能加载、策略和环境 step 链路能跑通。
+
+\subsection{真实硬件部署}
+
+真实硬件部署路径通过 \path|scripts/deploy/reorient_z.sh| 进入。该脚本最终调用 \code{LEAPHandController}，可选择 dry-run 模式，也可以连接实际串口并写入电机控制参数。由于该路径会设置控制模式、扭矩状态、P/D gain 和电流限制，因此正式运行时要提前检查安全条件。
+
+\begin{lstlisting}[language=bash, caption={离线部署链路检查}]
+bash scripts/deploy/reorient_z.sh \
+  --checkpoint pretrained/leap_hand_reorient.pth \
+  --device cuda:0 \
+  --dry-run \
+  --max-steps 5
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, caption={真实硬件命令模板}]
+bash scripts/deploy/reorient_z.sh \
+  --checkpoint pretrained/leap_hand_reorient.pth \
+  --port /dev/ttyUSB0 \
+  --hz 30 \
+  --kp 800 \
+  --kd 200 \
+  --curr-lim 500 \
+  --max-steps 600 \
+  --disable-torque-on-exit
+\end{lstlisting}
+
+\begin{assumption}{安全边界}{hardware-safety}
+真实硬件运行前应确认 LEAP Hand 固定方式、电源和电流限制、急停方案、串口设备、checkpoint 来源和最大运行步数。
+\end{assumption}
+
+\subsection{复现清单}
+
+\begin{table}[H]
+\centering
+\caption{复现路径与文件层级}
+\begin{tabularx}{\textwidth}{p{0.2\textwidth}p{0.4\textwidth}Y}
+\toprule
+目标 & 命令/文件 & 可证明内容 \\
+\midrule
+资产完整性 & \path|scripts/tools/check_assets.py| & USD 资产存在且与期望 hash 一致。\\
+任务注册 & \path|scripts/tools/list_tasks.py| & Gym registry 中存在 LEAP Hand 任务。\\
+仿真播放 & \path|scripts/eval/play_stage1.sh| & checkpoint 能接入仿真环境。\\
+训练入口 & \path|scripts/train/stage1.sh| & 训练脚本、Hydra 配置和 rl\_games runner 能启动。\\
+部署 dry-run & \path|scripts/deploy/reorient_z.sh| & 模型加载、观测历史和动作循环不依赖电机即可检查。\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{当前局限}
+
+第一，策略输入不包含物体状态，这符合低成本部署目标，但也意味着系统对接触状态的估计完全依赖历史和递归网络，失败模式可能不易解释。
+
+第二，当前任务只关注 $z$ 轴单轴重定向。它适合作为手内操作技术展示，但距离任意三维姿态重定向还有差距。若未来扩展到三轴目标，奖励函数、终止条件、目标生成和观测历史长度都可能需要重新审视。
+
+\section{结论}
+
+本项目展示了一条完整的 LEAP Hand 手内方块重定向技术路径：在 Isaac Lab 中实现直接强化学习环境，用 \code{rl\_games} 训练递归 PPO 策略，通过 ADR 增强接触动力学鲁棒性，并保留仿真播放与真实硬件部署接口。项目的特点是约束明确、链路完整、工程边界清楚，适合作为机器人学习方向作品集中展示“任务建模、训练策略、鲁棒性设计和部署接口”的代表项目。

@@ -1,0 +1,35 @@
+\section{项目概述}
+
+\subsection{摘要}
+
+本报告面向作品集的展示，整理并呈现仓库 \href{https://github.com/CQULeaf/leap-hand-inhand-reorientation}{\code{CQULeaf/leap-hand-inhand-reorientation}} 中 LEAP Hand 单轴手内方块重定向项目的技术细节，具体的仿真与实机效果视频见 \href{https://yexuhang.com/projects/leap-hand-inhand-reorientation}{项目展示页}。项目目标是在无视觉、无触觉反馈条件下，仅依赖电机本体感知历史与上一时刻目标动作，让 LEAP Hand 在 Isaac Lab 仿真环境中驱动方块围绕 $z$ 轴持续完成分段重定向任务，并提供从强化学习训练、checkpoint 播放到真实硬件部署的工程入口。
+
+报告采用技术报告常见的“背景--方法--实现--评估--讨论”结构。该结构与高校技术报告和科研论文中强调目的、方法、结果与讨论的写法一致\cite{melbourneTechReports,cmuImrd}，但表达上更突出项目亮点、系统边界和可复现路径。
+
+\begin{definition}{核心设计判断}{core-design}
+该项目的价值不在于堆叠传感器，而在于用简洁的本体感知观测、递归策略网络和渐进式域随机化，构建一条从高并行仿真训练到 LEAP Hand 硬件执行的闭环技术链路。
+\end{definition}
+
+\subsection{任务定义}
+
+本项目研究的问题是 dexterous in-hand manipulation 中的方块重定向任务。给定一个位于 LEAP Hand 掌内的立方体，策略需要持续改变手指关节目标，使物体姿态依次接近沿 $z$ 轴旋转后的目标姿态。仓库当前实现聚焦单轴重定向，而不是任意三维姿态控制；这一选择让任务更适合展示强化学习、目标更新、奖励设计和 Sim-to-Real 鲁棒性设计之间的关系。
+
+从控制约束看，策略没有直接使用外部相机、触觉阵列或物体真实状态作为输入。策略观测由关节位置与上一时刻目标动作组成，并保留 3 帧历史。这个约束使任务更接近低成本硬件可部署系统：真实机器人只需读取 Dynamixel 电机状态，再按照与仿真一致的归一化和关节顺序映射生成策略输入。
+
+\subsection{项目亮点}
+
+\begin{table}[H]
+\centering
+\caption{项目技术亮点}
+\begin{tabularx}{\textwidth}{p{0.22\textwidth}Y}
+\toprule
+亮点 & 说明 \\
+\midrule
+最小传感输入 & 策略观测仅使用关节位置和动作历史，不依赖视觉、触觉或物体状态输入。\\
+Isaac Lab 直接环境 & 基于 \code{DirectRLEnv} 实现任务逻辑，便于在仿真循环中精确控制动作、观测、奖励与重置。\\
+递归 PPO 策略 & \code{rl\_games} 配置采用 actor-critic MLP 与 GRU，适合利用短时历史弥补部分可观测性不足。\\
+自动域随机化 & 环境实现 ADR，将摩擦、质量、刚度阻尼、初始扰动、动作噪声和动作延迟逐步扩展。\\
+部署链路完整 & 仓库包含训练、评估、预训练 checkpoint 播放、Python SDK 直连 Dynamixel 和 ROS2 部署入口。\\
+\bottomrule
+\end{tabularx}
+\end{table}

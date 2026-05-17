@@ -1,0 +1,85 @@
+\section{强化学习训练与鲁棒性设计}
+
+\subsection{PPO 与递归策略网络}
+
+训练配置位于任务目录下的 \path|agents/rl_games_ppo_cfg.yaml|。配置使用 \code{rl\_games} 的连续动作 actor-critic 模型，算法名为 \code{a2c\_continuous}，并启用 PPO 训练选项。\code{rl\_games} 是面向高性能强化学习训练的框架，Isaac Lab 通过专门的 wrapper 将仿真环境接入其向量化训练接口\cite{rlgames,isaaclabRlWrapperDocs}。
+
+网络结构由共享 MLP 和 GRU 组成。MLP 单元数为 \code{[512, 256, 128]}，激活函数为 ELU；RNN 使用 1 层、256 单元的 GRU，并设置 \code{before\_mlp = true} 与 layer normalization。对于只有本体感知历史、没有物体位姿输入的任务，递归网络可以从动作和关节位置变化中隐式估计接触状态与物体运动趋势。
+
+\begin{table}[H]
+\centering
+\caption{训练配置摘要}
+\begin{tabularx}{\textwidth}{p{0.26\textwidth}Y}
+\toprule
+配置项 & 当前值 \\
+\midrule
+随机种子 & \code{42} \\
+折扣因子 & \code{gamma = 0.99} \\
+GAE 参数 & \code{tau = 0.95} \\
+学习率 & \code{3e-4}，adaptive schedule \\
+PPO clip & \code{e\_clip = 0.2} \\
+rollout horizon & \code{horizon\_length = 32} \\
+minibatch & \code{32768} \\
+mini epochs & \code{5} \\
+RNN 序列长度 & \code{seq\_length = 4} \\
+保存策略 & \code{save\_best\_after = 100}，\code{save\_frequency = 200} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{高并行仿真训练}
+
+环境配置默认 \code{scene.num\_envs = 8192}，这意味着每个训练更新可以同时收集大量交互样本。并行环境数与 GPU 物理仿真缓冲区共同决定训练吞吐。项目也提供 \code{--physx-smoke-buffers}、\code{--physx\_gpu\_contact\_count} 和 \code{--physx\_gpu\_patch\_count} 等调试参数，便于在不同显存环境下进行 smoke test。
+
+训练入口会把环境配置和 agent 配置 dump 到日志目录：
+
+\begin{lstlisting}[language=bash, caption={训练入口示例}]
+bash scripts/train/stage1.sh --profile local-5060
+
+bash scripts/train/stage1.sh \
+  --checkpoint pretrained/leap_hand_reorient.pth \
+  --max-iterations 1200 \
+  --run-name resume_reorientation
+\end{lstlisting}
+
+这种日志组织方式对复现实验尤其重要：同一个 checkpoint 是否可比较，取决于当时的环境参数、训练超参数和随机化范围是否一致。
+
+\subsection{自动域随机化}
+
+项目实现了 Automatic Domain Randomization, ADR。ADR 的核心思想是：训练初期使用较窄的动力学范围，策略达到一定重定向速度后，再逐步增加随机化强度。当前配置设置 \code{num\_increments = 25}，每次满足条件后增加一档参数范围。
+
+\begin{table}[H]
+\centering
+\caption{ADR 参数范围}
+\begin{tabularx}{\textwidth}{p{0.2\textwidth}p{0.3\textwidth}Y}
+\toprule
+随机化对象 & 范围/终值 & 目的 \\
+\midrule
+机器人摩擦 & 静摩擦、动摩擦固定为 \code{1.0}，恢复系数上界到 \code{0.5} & 覆盖接触反弹差异。\\
+关节刚度阻尼 & 刚度 \code{2.5-3.1}，阻尼 \code{0.05-0.15} & 降低对单一执行器参数的依赖。\\
+物体摩擦 & \code{0.3-1.5} & 增强不同表面接触条件下的鲁棒性。\\
+物体质量 & \code{0.9-1.3} 倍缩放 & 覆盖物体质量估计误差。\\
+物体尺寸 & pre-startup 缩放 \code{1.1-1.25} & 让策略适应不同方块尺寸。\\
+初始位姿 & 平移扰动最高 \code{0.01 m}，roll/pitch 最高 \code{0.1 rad} & 增强重置状态多样性。\\
+动作噪声 & \code{0.1-0.2} & 模拟控制命令误差。\\
+动作延迟 & 最高 \code{3} 个 policy step & 缓解仿真与硬件控制延迟差异。\\
+外力扰动 & 最大线加速度 \code{0.5-5.0} & 模拟不可预测扰动。\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{example}{为什么 ADR 适合这个项目}{adr-fit}
+手内操作高度依赖接触动力学。真实硬件上的摩擦、延迟、质量和电机响应很难与仿真完全一致。ADR 把这些不确定性从固定超参数改成逐步扩张的训练分布，使策略先学会基本技能，再逐步面对更难的物理变化。
+\end{example}
+
+\subsection{噪声、延迟与外力扰动}
+
+动作噪声在物理步预处理阶段注入，动作延迟通过动作历史缓冲实现，外力扰动在动作应用阶段按固定步频重采样并施加到物体上。三者分别模拟控制命令不精确、系统响应滞后和外界接触扰动。
+
+观测延迟配置当前范围为 \code{0.0-0.0}，即目前该项目没有启用观测延迟随机化，说明当前鲁棒性重点放在动作侧、物理参数侧和初始状态侧。若后续真实硬件日志显示状态读取存在明显延迟，可以把观测延迟作为下一轮训练的扩展项。
+
+\subsection{Sim-to-Real 接口}
+
+部署脚本中的 \code{LEAPHandController} 负责把仿真策略接到真实电机。它完成四件事：加载 \code{rl\_games} checkpoint，读取并归一化关节位置，维护与仿真一致的 3 帧观测历史，将策略动作转换成目标关节位置并发送到 Dynamixel。
+
+实机部署默认控制频率为 \code{30 Hz}，默认 P/D gain 分别为 \code{800} 和 \code{200}，默认电流限制为 \code{500 mA}。

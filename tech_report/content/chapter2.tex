@@ -1,0 +1,45 @@
+\section{技术背景与系统架构}
+
+\subsection{LEAP Hand 与低成本灵巧操作}
+
+LEAP Hand 是一个面向机器人学习的低成本、高效、类人灵巧手平台\cite{shaw2023leaphand}。对于作品集项目而言，它的意义在于提供了一个真实硬件可触达的实验对象：一方面，它有足够多的自由度支持手内操作；另一方面，它的电机状态读取和位置控制接口可以被工程化地接入策略部署脚本。
+
+本项目没有重新设计硬件，而是围绕 LEAP Hand 右手 USD 资产、Isaac Lab 任务注册和 Dynamixel 控制链路完成软件系统集成。仓库通过 \code{assets/leap\_hand\_v1\_right} 管理仿真资产，通过 \code{deployment\_scripts} 管理硬件部署逻辑，使“仿真中的关节顺序”和“实机电机顺序”可以在同一代码库中显式对齐。
+
+\subsection{Isaac Lab DirectRLEnv}
+
+Isaac Lab 提供了面向强化学习任务的环境抽象，其中 \code{DirectRLEnv} 适合将奖励、观测、动作应用和重置逻辑直接写入环境类\cite{isaaclabEnvDocs}。本项目的核心环境为 \code{ReorientationEnv}，配置类为 \code{LeapHandEnvCfg}，任务通过 Gymnasium id \code{Isaac-Reorient-Cube-Leap} 注册。
+
+相比完全依赖 manager-based 配置的任务，直接环境实现更利于展示本项目的控制细节：目标姿态更新、方块跌落判断、动作延迟、外力扰动和 ADR 更新都能在同一环境类中被追踪。
+
+\subsection{训练、评估与部署链路}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{assets/figures/system_architecture_gpt_image2.png}
+\caption{项目系统架构：同一任务配置支撑训练、评估和部署。}
+\label{fig:architecture}
+\end{figure}
+
+如图 \ref{fig:architecture} 所示，项目可以分成三条链路：训练链路在 Isaac Lab 中启动环境并使用 \code{rl\_games} 更新策略；评估链路加载 checkpoint 并在仿真中播放策略；部署链路调用硬件控制脚本，完成模型加载、观测构造、动作输出和 Dynamixel 电机命令发送。
+
+\subsection{工程目录分层}
+
+仓库目录按照“入口脚本--Isaac Lab 扩展--资产--工具--部署”分层组织。这样的结构让新读者可以先看 README 和 shell 入口，再进入 \code{source/LEAP\_Isaaclab} 理解任务实现。
+
+\begin{table}[H]
+\centering
+\caption{主要工程模块}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}Y}
+\toprule
+路径 & 职责 \\
+\midrule
+\path|scripts/train| & 训练入口，封装本地 profile、checkpoint 恢复和迭代数设置。\\
+\path|scripts/eval| & 仿真播放入口，默认加载预训练权重并支持有限步 smoke test。\\
+\path|scripts/deploy| & 实机部署包装脚本，提供 dry-run、串口、电流限制和步数上限参数。\\
+\path|source/LEAP_Isaaclab/tasks| & Gym 任务注册、环境配置和 \code{DirectRLEnv} 实现。\\
+\path|source/LEAP_Isaaclab/utils| & ADR、观测处理、LEAP Hand 工具函数和 Dynamixel 客户端。\\
+\code{pretrained} & 存放项目默认 checkpoint。\\
+\bottomrule
+\end{tabularx}
+\end{table}

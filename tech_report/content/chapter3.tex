@@ -1,0 +1,133 @@
+\section{任务建模与环境实现}
+
+\subsection{MDP 抽象}
+
+从强化学习角度看，该任务可以被建模为部分可观测马尔可夫决策过程。真实状态包含机器人关节状态、物体位姿、接触状态和动力学参数；但策略实际看到的是经过归一化的关节位置和上一时刻目标动作历史。因此，项目使用 3 帧历史和 GRU 网络来补偿缺失的物体状态与接触状态。
+
+形式上，可将任务写作如式~\eqref{eq:pomdp} 所示：
+\begin{equation}
+\label{eq:pomdp}
+    \mathcal{M}=\langle \mathcal{S}, \mathcal{A}, \mathcal{O}, P, r, \gamma \rangle ,
+\end{equation}
+其中 $\mathcal{S}$ 包含手部关节状态、物体位姿和接触动力学参数，$\mathcal{A}\subset[-1,1]^{16}$ 为 16 维连续动作空间，$\mathcal{O}$ 是策略实际可见的本体感知观测空间。由于物体位姿不进入策略输入，策略学习的是 $\pi_\theta(a_t\mid o_t,h_t)$，而不是直接依赖完整状态的 $\pi_\theta(a_t\mid s_t)$。
+
+\begin{table}[H]
+\centering
+\caption{任务建模摘要}
+\begin{tabularx}{\textwidth}{p{0.24\textwidth}Y}
+\toprule
+项目 & 当前实现 \\
+\midrule
+任务 id & \code{Isaac-Reorient-Cube-Leap} \\
+环境基类 & Isaac Lab \code{DirectRLEnv} \\
+并行环境数 & 默认 \code{8192} \\
+仿真步长 & \code{dt = 1/120}，动作 decimation 为 \code{4} \\
+动作空间 & 16 维，对应 LEAP Hand 16 个可控关节 \\
+观测空间 & 96 维，来自每帧 32 维观测乘以 3 帧历史 \\
+单帧观测 & 16 维归一化关节位置 + 16 维当前目标关节位置 \\
+目标更新 & 每次成功后目标姿态沿 $z$ 轴前进 $2\pi/16$ \\
+\bottomrule
+\end{tabularx}
+\label{tab:mdp}
+\end{table}
+
+\subsection{动作接口}
+
+环境支持相对动作和绝对动作两种模式，当前配置使用 \code{relative}。在相对动作模式下，策略输出先被裁剪到 $[-1,1]$，再乘以移动平均系数 \code{1/24}，叠加到上一时刻目标关节位置上，最后根据关节上下限饱和裁剪。这样的接口把策略输出解释为小幅关节目标增量，有助于保持动作平滑，也更贴近实机位置控制。
+
+相对动作可写为式~\eqref{eq:relative-action}：
+\begin{equation}
+\label{eq:relative-action}
+    u_t=\operatorname{clip}\left(u_{t-1}+\alpha a_t,\;q_{\min},\;q_{\max}\right),
+    \qquad \alpha=\frac{1}{24},
+\end{equation}
+其中 $a_t$ 是策略输出，$u_t$ 是发送给关节位置控制器的目标，$q_{\min}$ 和 $q_{\max}$ 来自仿真关节限位。
+
+\begin{lstlisting}[language=Python, caption={相对动作更新的核心逻辑}]
+targets = prev_targets[:, actuated_dof_indices] + act_moving_average * actions
+cur_targets[:, actuated_dof_indices] = saturate(
+    targets,
+    hand_dof_lower_limits[:, actuated_dof_indices],
+    hand_dof_upper_limits[:, actuated_dof_indices],
+)
+\end{lstlisting}
+
+部署脚本中保持了同样的动作解释方式：\code{action\_scale = 1/24}，\code{action\_type = "relative"}，并在发送电机命令前完成 sim-to-real 关节顺序映射与角度坐标转换。这一点非常关键，因为训练环境和硬件控制器如果对动作语义理解不一致，checkpoint 即使能在仿真中运行，也难以安全迁移到实机。
+
+\subsection{观测构造}
+
+策略输入不包含物体真实位置和姿态，而是由手部本体感知构成。环境首先把关节位置按上下限归一化到 $[-1,1]$，再拼接当前目标关节位置，得到 32 维单帧观测。之后，环境维护一个历史缓冲区，将 3 帧观测展平为式~\eqref{eq:observation-history} 中的 96 维策略输入。
+
+\begin{equation}
+\label{eq:observation-history}
+    \hat{q}_t=\frac{2q_t-q_{\max}-q_{\min}}{q_{\max}-q_{\min}},
+    \qquad
+    x_t=[\hat{q}_t,u_t]\in\mathbb{R}^{32},
+    \qquad
+    o_t=\operatorname{vec}(x_{t-2},x_{t-1},x_t)\in\mathbb{R}^{96}.
+\end{equation}
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\caption{BuildProprioceptiveHistory}
+\KwIn{joint position $q_t$, previous target $u_t$, history buffer $H_{t-1}$, limits $q_{\min},q_{\max}$}
+\KwOut{policy observation $o_t\in\mathbb{R}^{96}$ and updated buffer $H_t$}
+\BlankLine
+$\hat{q}_t \leftarrow (2q_t-q_{\max}-q_{\min})/(q_{\max}-q_{\min})$\tcp*[r]{normalize to $[-1,1]$}
+$x_t \leftarrow \operatorname{concat}(\hat{q}_t,u_t)$\tcp*[r]{$x_t\in\mathbb{R}^{32}$}
+$H_t \leftarrow \operatorname{ShiftLeft}(H_{t-1})$\;
+$H_t[:,\mathrm{last}] \leftarrow x_t$\;
+$o_t \leftarrow \operatorname{Flatten}(\operatorname{Transpose}(H_t))$\;
+\Return{$o_t,H_t$}\;
+\end{algorithm}
+
+这种观测设计使策略没有“作弊式”读取物体位姿。物体状态只参与奖励、终止条件和目标判断，而不直接进入策略输入。对于作品集展示，这是一个值得强调的设计点：系统在训练时利用仿真状态提供监督信号，但部署时策略输入仍保持低成本和可实机获得。
+
+\subsection{奖励函数}
+
+奖励函数由位置约束、姿态对齐、动作正则、姿态偏差正则、成功奖励和跌落惩罚构成。方块到掌内参考位置的距离越小，奖励越高；物体姿态与目标姿态的旋转距离越小，奖励越高；动作幅度和偏离默认抓取姿态会被惩罚。当旋转误差和位置误差同时满足阈值时，环境触发目标更新并给出成功奖励。
+
+姿态误差使用式~\eqref{eq:rotation-distance} 所示的四元数相对旋转距离：
+\begin{equation}
+\label{eq:rotation-distance}
+    d_R(R_o,R_g)=2\arcsin\left(\left\|\operatorname{vec}\left(q_o q_g^{-1}\right)\right\|_2\right),
+\end{equation}
+其中 $q_o$ 和 $q_g$ 分别表示物体姿态和目标姿态。总奖励可概括为式~\eqref{eq:reward}：
+\begin{equation}
+\label{eq:reward}
+    r_t=w_p\lVert p_o-p_{\mathrm{hand}}\rVert_2
+       +\frac{w_R}{|d_R|+\epsilon}
+       +w_a\lVert a_t\rVert_2^2
+       +w_q\lVert u_t-q_{\mathrm{grasp}}\rVert_2^2
+       +b_{\mathrm{success}}+b_{\mathrm{fall}} .
+\end{equation}
+
+\begin{table}[H]
+\centering
+\caption{奖励与终止项分解}
+\begin{tabularx}{\textwidth}{p{0.25\textwidth}p{0.24\textwidth}Y}
+\toprule
+项目 & 配置/条件 & 作用 \\
+\midrule
+位置距离奖励 & \code{dist\_reward\_scale = -10.0} & 约束方块留在掌内目标区域附近。\\
+姿态对齐奖励 & \makecell[l]{\code{rot\_reward = 1.0}\\\code{rot\_eps = 0.1}} & 鼓励物体姿态接近当前目标姿态。\\
+动作惩罚 & \code{-0.0002} & 抑制过大的关节目标增量。\\
+抓取姿态偏差 & \code{-0.3} & 限制策略偏离默认抓取姿态过远。\\
+成功奖励 & \code{250} & 当姿态和位置同时达标时推动连续重定向。\\
+跌落惩罚 & \code{fall\_dist = 0.07}, \code{fall\_penalty = -10} & 方块离开掌内区域时惩罚并终止 episode。\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{目标更新与终止条件}
+
+单轴重定向通过连续更新目标姿态实现。环境初始化时把目标姿态设置为物体当前 yaw 的下一个 $z$ 轴分段目标；当成功条件满足时，目标姿态继续沿 $z$ 轴旋转 $2\pi/16$。因此，一个完整旋转被拆成 16 个局部目标，策略只需要持续完成短距离姿态推进。
+
+目标更新可以写成式~\eqref{eq:goal-update}：
+\begin{equation}
+\label{eq:goal-update}
+    q^{g}_{k+1}=q_z\left(\frac{2\pi}{16}\right)\otimes q^{g}_{k},
+\end{equation}
+其中 $\otimes$ 表示四元数乘法，$q_z(\cdot)$ 表示绕 $z$ 轴的增量旋转。
+
+终止条件主要包括两类：方块离掌心参考位置过远，以及 episode 达到随机化后的最大长度。此外，环境还检查方块是否发生明显翻转，即物体局部 $z$ 轴与目标局部 $z$ 轴夹角过大。该判断避免策略通过不符合任务意图的翻转姿态获得局部奖励。

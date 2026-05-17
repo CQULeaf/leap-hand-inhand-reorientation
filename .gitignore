@@ -27,6 +27,45 @@
 docker/artifacts/
 *.tmp
 
+# LaTeX auxiliary files
+# Keep source files, bibliography files, figures, and final PDFs tracked.
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex
+*.synctex.gz
+*.toc
+*.xdv
+*.dvi
+*.lof
+*.lot
+*.lol
+*.nav
+*.snm
+*.vrb
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+*.ilg
+*.ind
+*.idx
+*.listing
+*.pyg
+_minted-*/
+**/.latex-build/
+**/latex.out/
+!*.pdf
+
 # Isaac-Sim packman
 _isaac_sim*
 _repo

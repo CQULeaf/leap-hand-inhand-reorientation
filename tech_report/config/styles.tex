@@ -1,0 +1,56 @@
+% 页面布局设置
+\geometry{a4paper,left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm}
+\setlength{\headheight}{14.5pt}
+\addtolength{\topmargin}{-2.5pt}
+
+% 引用文献设置
+\addbibresource{bib/references.bib}
+
+% 配置超链接颜色
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=magenta,
+    citecolor=black,
+    pdfborder={0 0 0}
+}
+\setcounter{biburllcpenalty}{9000}
+\setcounter{biburlucpenalty}{9000}
+\setcounter{biburlnumpenalty}{9000}
+\setlength\bibitemsep{0.35em}
+\AtBeginBibliography{\small}
+
+% 设置西文字体：Palatino 风格
+\setmainfont{TeX Gyre Pagella}[
+  Ligatures = TeX
+]
+\setsansfont{TeX Gyre Heros}[
+  Scale = 0.92
+]
+\setmonofont{Consolas}[
+  Scale = MatchLowercase
+]
+\setmathfont{TeX Gyre Pagella Math}
+
+% 页眉页脚设置
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\leftmark}
+\fancyhead[R]{\thepage}
+
+\fancyfoot[L]{LEAP Hand In-Hand Reorientation}
+\fancyfoot[R]{\href{https://github.com/CQULeaf/leap-hand-inhand-reorientation}{\faGithub\ Repository}}
+
+% 代码高亮设置
+\lstset{
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    frame=single,
+    breaklines=true,
+    columns=fullflexible
+}
+
+% 添加背景水印，沿用模板的正文 logo 视觉
+\backgroundsetup{scale=0.4, angle=0, opacity = 0.12,contents = {\includegraphics[width=\paperwidth, height=\paperwidth, keepaspectratio]{assets/logos/CQU-Logo.png}}}
